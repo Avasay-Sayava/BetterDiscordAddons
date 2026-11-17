@@ -47,7 +47,7 @@ const API = {
 
 const CHANGELOG = {
   blurb:
-    "Discord compatibility fixes, settings & preview sync, and a new update changelog.",
+    "Discord compatibility fixes, settings & preview sync.",
   changes: [
     {
       title: "Bug Fixes",
