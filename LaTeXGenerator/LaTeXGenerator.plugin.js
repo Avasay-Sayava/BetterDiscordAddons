@@ -58,13 +58,13 @@ const CHANGELOG = {
         "Restored the Default reset button on all color pickers.",
         "Synced the modal color picker and preview state immediately when closing Settings.",
         "Applied custom syntax highlighting colors inside the Recents modal.",
-        "Removed the 50 marker from the modal DPI slider to match Settings.",
       ],
     },
     {
       title: "Improvements",
       type: "improved",
       items: [
+        "Removed the 50 marker from the modal DPI slider to match Settings.",
         "Cleaned up plugin lifecycle and merged style injection using BetterDiscord's scoped BdApi.",
         "Removed dead code and redundant checks across color parsing, clipboard handling, and chat bar patching.",
       ],
@@ -1951,9 +1951,7 @@ class UI {
   }
 
   static RecentsModal({ onOpen }) {
-    const [recents, setRecents] = useState(
-      Settings.get(SETTINGS_KEYS.RECENTS),
-    );
+    const [recents, setRecents] = useState(Settings.get(SETTINGS_KEYS.RECENTS));
 
     const deleteRecent = (index) => {
       const updated = recents.filter((_, i) => i !== index);
