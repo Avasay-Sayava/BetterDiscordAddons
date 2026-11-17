@@ -657,9 +657,7 @@ const CSS = `/*css*/
   color: transparent;
   caret-color: var(--text-default);
 }
-/*!css*/`;
 
-const MIRROR_CSS = `/*css*/
 .latex-generator-token--command {
   color: var(--latex-token-command, ${DEFAULT_SYNTAX_COLORS[SYNTAX_TYPES.COMMAND].hex});
 }
@@ -2041,12 +2039,10 @@ UI.bracketMatching = null;
 class Style {
   static inject() {
     DOM.addStyle(CSS);
-    DOM.addStyle(`${Plugin.KEY}-mirror`, MIRROR_CSS);
   }
 
   static remove() {
     DOM.removeStyle();
-    DOM.removeStyle(`${Plugin.KEY}-mirror`);
   }
 }
 
