@@ -47,20 +47,13 @@ const API = {
 
 const CHANGELOG = {
   blurb:
-    "Changes since v2.3.1: Discord compatibility fixes, settings & preview sync, and a new update changelog.",
+    "Discord compatibility fixes, settings & preview sync, and a new update changelog.",
   changes: [
-    {
-      title: "New Features",
-      type: "added",
-      items: [
-        "Added this changelog modal to highlight plugin updates automatically.",
-      ],
-    },
     {
       title: "Bug Fixes",
       type: "fixed",
       items: [
-        "Fixed the chat bar button not showing on newer Discord / React 19 builds.",
+        "Fixed the chat bar button not showing.",
         "Fixed syntax highlighting colors not saving from Settings.",
         "Restored the Default reset button on all color pickers.",
         "Synced the modal color picker and preview state immediately when closing Settings.",
