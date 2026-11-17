@@ -45,6 +45,29 @@ const API = {
   URL: "https://latex.codecogs.com/",
 };
 
+const CHANGELOG = {
+  blurb: "Bug fixes and improvements for settings, previews, and recents.",
+  changes: [
+    {
+      title: "Bug Fixes",
+      type: "fixed",
+      items: [
+        "Fixed syntax highlighting colors not saving from Settings.",
+        "Restored the Default reset button on all color pickers.",
+        "Synced the modal color picker and preview state immediately when closing Settings.",
+        "Applied custom syntax highlighting colors inside the Recents modal.",
+      ],
+    },
+    {
+      title: "Improvements",
+      type: "improved",
+      items: [
+        "Cleaned up plugin lifecycle and style injection using BetterDiscord's scoped API.",
+      ],
+    },
+  ],
+};
+
 const LATEX_PAYLOAD_FORMAT = (dpi, r, g, b, latex) =>
   `\\dpi{${dpi}} \\color[RGB]{${r},${g},${b}} ${latex}`;
 
@@ -137,6 +160,7 @@ const DEFAULT_COLORS = [
 ].map((color) => Color.from(color));
 
 const SETTINGS_KEYS = {
+  CURRENT_VERSION: "current-version",
   TERMS: "agreed-to-terms",
   AUTO_PREVIEW: "auto-preview",
   AUTO_BRACKET_CLOSE: "auto-bracket-close",
@@ -725,6 +749,9 @@ class Settings {
 
       case SETTINGS_KEYS.MAX_RECENTS:
         return Number.parseInt(value) || DEFAULT_MAX_RECENTS;
+
+      case SETTINGS_KEYS.CURRENT_VERSION:
+        return typeof value === "string" ? value : null;
 
       case SETTINGS_KEYS.RECENTS:
         return Array.isArray(value) ? value : [];
@@ -1830,6 +1857,22 @@ class UI {
     UI.focusGeneratorTextarea({ preferStoredCursor: false });
   }
 
+  static showChangelog(version) {
+    BdUI.showChangelogModal({
+      title: Plugin.NAME,
+      subtitle: `Version ${version}`,
+      blurb: CHANGELOG.blurb,
+      changes: CHANGELOG.changes,
+    });
+  }
+
+  static showChangelogIfUpdated(version) {
+    if (Settings.get(SETTINGS_KEYS.CURRENT_VERSION) === version) return;
+
+    UI.showChangelog(version);
+    Settings.set(SETTINGS_KEYS.CURRENT_VERSION, version);
+  }
+
   static openSettingsFromModal(onClose) {
     const handleClose = () => {
       if (onClose) onClose();
@@ -2071,9 +2114,14 @@ class Style {
 }
 
 module.exports = class LaTeXGeneratorPlugin {
+  constructor(meta) {
+    this.meta = meta;
+  }
+
   start() {
     Style.inject();
     ChatBar.patch();
+    UI.showChangelogIfUpdated(this.meta.version);
   }
 
   stop() {
