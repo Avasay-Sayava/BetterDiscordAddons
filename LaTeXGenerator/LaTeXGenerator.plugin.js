@@ -52,6 +52,7 @@ const CHANGELOG = {
       title: "Bug Fixes",
       type: "fixed",
       items: [
+        "Fixed the chat bar button not showing.",
         "Fixed syntax highlighting colors not saving from Settings.",
         "Restored the Default reset button on all color pickers.",
         "Synced the modal color picker and preview state immediately when closing Settings.",
