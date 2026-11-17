@@ -23,25 +23,10 @@ const { useState, useEffect, useRef, createElement } = React;
 const { Tooltip, ColorInput, SliderInput } = Components;
 const { min, max } = Math;
 
-const byClassName = (name) => (cls) =>
-  typeof cls === "string" && cls.startsWith(`${name}_`);
-
 const DiscordClasses = {
-  ButtonWrapper:
-    Webpack.getByKeys("buttonWrapper", "buttonContent") ??
-    Webpack.getBySource("buttonWrapper_", "buttonContent_", {
-      map: { button: byClassName("button") },
-    }),
-  Button:
-    Webpack.getByKeys("emojiButton", "stickerButton") ??
-    Webpack.getBySource("emojiButton_", "stickerButton_", {
-      map: { button: byClassName("button") },
-    }),
-  Icon:
-    Webpack.getByKeys("iconContainer", "trinketsIcon") ??
-    Webpack.getBySource("iconContainer_", "trinketsIcon_", {
-      map: { iconContainer: byClassName("iconContainer") },
-    }),
+  ButtonWrapper: Webpack.getByKeys("buttonWrapper", "buttonContent"),
+  Button: Webpack.getByKeys("emojiButton", "stickerButton"),
+  Icon: Webpack.getByKeys("iconContainer", "trinketsIcon"),
 };
 
 const ModalActions = Webpack.getByKeys(
@@ -2074,31 +2059,27 @@ class UI {
 }
 
 class ChatBar {
-  static resolveButtons(module) {
-    if (!module) return null;
-
-    if (typeof module?.type === "function") return module;
-    if (typeof module?.A?.type === "function") return module.A;
-    if (typeof module?.Ay?.type === "function") return module.Ay;
-    if (typeof module?.default?.type === "function") return module.default;
-    if (typeof module?.default?.A?.type === "function") return module.default.A;
-
-    return null;
-  }
-
   static patch() {
-    const applyPatch = (Buttons) => {
-      if (!Buttons || typeof Buttons.type !== "function") {
-        UI.toast(
-          "Failed to find chat bar to inject the button",
-          TOAST_TYPES.ERROR,
-        );
-        return;
-      }
+    const ChatBarButtons = Webpack.getBySource(
+      "isSubmitButtonEnabled",
+      "getActiveOption",
+    )?.A;
 
-      ChatBar.patchedButtons = Buttons;
+    if (!ChatBarButtons) {
+      UI.toast(
+        "Failed to find chat bar to inject the button",
+        TOAST_TYPES.ERROR,
+      );
+      return;
+    }
 
-      Patcher.after(Plugin.PATCH_ID, Buttons, "type", (_, [args], res) => {
+    ChatBar.patchedButtons = ChatBarButtons;
+
+    Patcher.after(
+      Plugin.PATCH_ID,
+      ChatBarButtons,
+      "type",
+      (_, [args], res) => {
         if (
           args?.disabled ||
           !Object.values(CHAT_BAR_TYPES).includes(
@@ -2109,64 +2090,18 @@ class ChatBar {
           return;
         }
 
-        const exists = res.props.children.some(
-          (child) => child?.key === "latex-generator-button",
-        );
-        if (exists) return;
-
         res.props.children.unshift(
           createElement(UI.ChatBarButton, {
             key: "latex-generator-button",
           }),
         );
-      });
-
-      ReactUtils?.rerenderComponent?.([Buttons, "type"]);
-    };
-
-    const sourceMatch = Webpack.getBySource(
-      "isSubmitButtonEnabled",
-      "getActiveOption",
+      },
     );
 
-    const fromSource = ChatBar.resolveButtons(sourceMatch);
-    if (fromSource) {
-      applyPatch(fromSource);
-      return;
-    }
-
-    if (
-      typeof Webpack.waitForModule !== "function" ||
-      !Webpack.Filters?.bySource
-    ) {
-      UI.toast(
-        "Failed to find chat bar to inject the button",
-        TOAST_TYPES.ERROR,
-      );
-      return;
-    }
-
-    ChatBar.unpatchController?.abort();
-    const controller = new AbortController();
-    ChatBar.unpatchController = controller;
-
-    Webpack.waitForModule(
-      Webpack.Filters.bySource("isSubmitButtonEnabled", "getActiveOption"),
-      {
-        signal: controller.signal,
-      },
-    )
-      .then((module) => {
-        if (controller.signal.aborted) return;
-        const resolved = ChatBar.resolveButtons(module);
-        applyPatch(resolved);
-      })
-      .catch(() => {});
+    ReactUtils?.rerenderComponent?.([ChatBarButtons, "type"]);
   }
 
   static unpatch() {
-    ChatBar.unpatchController?.abort();
-    ChatBar.unpatchController = null;
     Patcher.unpatchAll(Plugin.PATCH_ID);
     if (ChatBar.patchedButtons) {
       ReactUtils?.rerenderComponent?.([ChatBar.patchedButtons, "type"]);
@@ -2175,7 +2110,6 @@ class ChatBar {
   }
 }
 
-ChatBar.unpatchController = null;
 ChatBar.patchedButtons = null;
 UI.focusTimer = null;
 UI.lastCursorIndex = null;
