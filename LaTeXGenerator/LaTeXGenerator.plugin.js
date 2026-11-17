@@ -1190,7 +1190,7 @@ class UI {
             name: "Default Color",
             note: "Default equation color.",
             value: defaultColor.hex,
-            defaultValue: DEFAULT_LATEX_SETTINGS.color.hex,
+            defaultColor: DEFAULT_LATEX_SETTINGS.color.hex,
             colors: [],
           },
           {
@@ -1227,7 +1227,7 @@ class UI {
           name: entry.name,
           note: entry.note,
           value: syntaxColors[entry.key].hex,
-          defaultValue: DEFAULT_SYNTAX_COLORS[entry.key].hex,
+          defaultColor: DEFAULT_SYNTAX_COLORS[entry.key].hex,
           colors: [],
         })),
       },
@@ -1741,7 +1741,7 @@ class UI {
             { className: "latex-generator-inline-color-controls" },
             createElement(ColorInput, {
               value: insertColor.hex,
-              defaultValue: baseColor.hex,
+              defaultColor: baseColor.hex,
               colors: DEFAULT_COLORS.map((swatch) => swatch.hex),
               onChange: (val) => setInsertColor(Color.from(val, baseColor)),
             }),
