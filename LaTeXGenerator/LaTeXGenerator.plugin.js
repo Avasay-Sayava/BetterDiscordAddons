@@ -1715,7 +1715,7 @@ class UI {
             max: 1200,
             value: dpi,
             onChange: (val) => setDpi(val),
-            markers: [50, 100, 250, 500, 800, 1200],
+            markers: [100, 250, 500, 800, 1200],
           }),
         ),
 
