@@ -46,24 +46,34 @@ const API = {
 };
 
 const CHANGELOG = {
-  blurb: "Bug fixes and improvements for settings, previews, and recents.",
+  blurb:
+    "Changes since v2.3.1: Discord compatibility fixes, settings & preview sync, and a new update changelog.",
   changes: [
+    {
+      title: "New Features",
+      type: "added",
+      items: [
+        "Added this changelog modal to highlight plugin updates automatically.",
+      ],
+    },
     {
       title: "Bug Fixes",
       type: "fixed",
       items: [
-        "Fixed the chat bar button not showing.",
+        "Fixed the chat bar button not showing on newer Discord / React 19 builds.",
         "Fixed syntax highlighting colors not saving from Settings.",
         "Restored the Default reset button on all color pickers.",
         "Synced the modal color picker and preview state immediately when closing Settings.",
         "Applied custom syntax highlighting colors inside the Recents modal.",
+        "Removed the redundant 50 marker from the modal DPI slider to match Settings.",
       ],
     },
     {
       title: "Improvements",
       type: "improved",
       items: [
-        "Cleaned up plugin lifecycle and style injection using BetterDiscord's scoped API.",
+        "Cleaned up plugin lifecycle and merged style injection using BetterDiscord's scoped BdApi.",
+        "Removed dead code and redundant checks across color parsing, clipboard handling, and chat bar patching.",
       ],
     },
   ],
