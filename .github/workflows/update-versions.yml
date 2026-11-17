@@ -2,7 +2,7 @@ name: Update Version Badges
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
     paths:
       - '**/*.plugin.js'
 

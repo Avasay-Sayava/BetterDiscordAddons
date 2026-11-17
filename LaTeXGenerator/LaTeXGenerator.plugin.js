@@ -3,9 +3,14 @@
  * @author Avasay-Sayava
  * @authorId 812235988659077120
  * @description Adds a button to the chat bar to generate and copy LaTeX equations as images.
- * @version 2.3.3
+ * @version 2.3.5
  * @source https://github.com/Avasay-Sayava/BetterDiscordPlugins/blob/main/LaTeXGenerator/LaTeXGenerator.plugin.js
  */
+
+const Plugin = {
+  NAME: "LaTeX Generator",
+  KEY: "LaTeXGenerator",
+};
 
 const {
   React,
@@ -17,7 +22,7 @@ const {
   DOM,
   Patcher,
   Logger,
-} = BdApi;
+} = new BdApi(Plugin.KEY);
 
 const { useState, useEffect, useRef, createElement } = React;
 const { Tooltip, ColorInput, SliderInput } = Components;
@@ -35,15 +40,36 @@ const ModalActions = Webpack.getByKeys(
   "closeAllModals",
 );
 
-const Plugin = {
-  NAME: "LaTeX Generator",
-  KEY: "LaTeXGenerator",
-  PATCH_ID: "latex-generator",
-};
-
 const API = {
   NAME: "CodeCogs LaTeX API",
   URL: "https://latex.codecogs.com/",
+};
+
+const CHANGELOG = {
+  blurb:
+    "Discord compatibility fixes, settings & preview sync.",
+  changes: [
+    {
+      title: "Bug Fixes",
+      type: "fixed",
+      items: [
+        "Fixed the chat bar button not showing.",
+        "Fixed syntax highlighting colors not saving from Settings.",
+        "Restored the Default reset button on all color pickers.",
+        "Synced the modal color picker and preview state immediately when closing Settings.",
+        "Applied custom syntax highlighting colors inside the Recents modal.",
+      ],
+    },
+    {
+      title: "Improvements",
+      type: "improved",
+      items: [
+        "Removed the 50 marker from the modal DPI slider to match Settings.",
+        "Cleaned up plugin lifecycle and merged style injection using BetterDiscord's scoped BdApi.",
+        "Removed dead code and redundant checks across color parsing, clipboard handling, and chat bar patching.",
+      ],
+    },
+  ],
 };
 
 const LATEX_PAYLOAD_FORMAT = (dpi, r, g, b, latex) =>
@@ -52,10 +78,7 @@ const LATEX_PAYLOAD_FORMAT = (dpi, r, g, b, latex) =>
 const IMAGE_MIME_TYPE = "image/png";
 
 const ERROR_MESSAGES = {
-  CANVAS_CONTEXT_FAILED: "Failed to get canvas context.",
   BLOB_CREATION_FAILED: "Failed to create PNG blob.",
-  CLIPBOARD_NOT_SUPPORTED:
-    "Clipboard image write is not supported in this environment.",
   IMAGE_LOAD_FAILED: "Failed to load image from API.",
   IMAGE_PROCESS_FAILED: "Failed to process image.",
 };
@@ -64,8 +87,6 @@ const TOAST_TYPES = {
   SUCCESS: "success",
   ERROR: "error",
   INFO: "info",
-  WARNING: "warning",
-  DEFAULT: "default",
 };
 
 class Color {
@@ -79,18 +100,12 @@ class Color {
   static from(value, fallback = new Color(255, 255, 255, 1)) {
     if (value instanceof Color) return value.clone();
 
-    if (Array.isArray(value)) {
-      return new Color(value[0], value[1], value[2], value[3] ?? 1);
-    }
-
     if (typeof value === "number") {
       return new Color((value >> 16) & 255, (value >> 8) & 255, value & 255, 1);
     }
 
     if (typeof value === "string") {
-      const normalized = value.trim();
-
-      let match = /^#([A-Fa-f0-9]{6})$/.exec(normalized);
+      const match = /^#([A-Fa-f0-9]{6})$/.exec(value.trim());
       if (match) {
         const integer = Number.parseInt(match[1], 16);
         return new Color(
@@ -100,40 +115,9 @@ class Color {
           1,
         );
       }
-
-      match = /^#([A-Fa-f0-9]{8})$/.exec(normalized);
-      if (match) {
-        const integer = Number.parseInt(match[1], 16);
-        return new Color(
-          (integer >> 24) & 255,
-          (integer >> 16) & 255,
-          (integer >> 8) & 255,
-          ((integer & 255) / 255).toFixed(3),
-        );
-      }
-
-      match =
-        /^rgba?\(\s*([0-9]{1,3})\s*,\s*([0-9]{1,3})\s*,\s*([0-9]{1,3})(?:\s*,\s*([0-9]*\.?[0-9]+)\s*)?\)$/.exec(
-          normalized,
-        );
-      if (match) {
-        return new Color(match[1], match[2], match[3], match[4] ?? 1);
-      }
     }
 
     if (value && typeof value === "object") {
-      if (typeof value.hex === "string") {
-        return Color.from(value.hex, fallback);
-      }
-
-      if (value.rgb && typeof value.rgb === "object") {
-        return Color.from(value.rgb, fallback);
-      }
-
-      if (value.color && typeof value.color === "string") {
-        return Color.from(value.color, fallback);
-      }
-
       return new Color(value.r, value.g, value.b, value.a);
     }
 
@@ -148,10 +132,6 @@ class Color {
     return `#${this.r.toString(16).padStart(2, "0")}${this.g
       .toString(16)
       .padStart(2, "0")}${this.b.toString(16).padStart(2, "0")}`.toUpperCase();
-  }
-
-  get rgba() {
-    return `rgba(${this.r}, ${this.g}, ${this.b}, ${this.a})`;
   }
 
   get json() {
@@ -184,6 +164,7 @@ const DEFAULT_COLORS = [
 ].map((color) => Color.from(color));
 
 const SETTINGS_KEYS = {
+  CURRENT_VERSION: "current-version",
   TERMS: "agreed-to-terms",
   AUTO_PREVIEW: "auto-preview",
   AUTO_BRACKET_CLOSE: "auto-bracket-close",
@@ -241,14 +222,9 @@ const DEFAULT_SYNTAX_COLORS = {
   [SETTINGS_KEYS.MATCHED_BRACE_COLOR]: Color.from(0xc678dd),
 };
 
-const syntaxColorSetting = ({
+const syntaxColorSetting = ({ key, name, note }) => ({
   key,
-  id = key ? `syntax-color-${key}` : undefined,
-  name,
-  note,
-}) => ({
-  key,
-  id,
+  id: `syntax-color-${key}`,
   name,
   note,
 });
@@ -709,9 +685,7 @@ const CSS = `/*css*/
   color: transparent;
   caret-color: var(--text-default);
 }
-/*!css*/`;
 
-const MIRROR_CSS = `/*css*/
 .latex-generator-token--command {
   color: var(--latex-token-command, ${DEFAULT_SYNTAX_COLORS[SYNTAX_TYPES.COMMAND].hex});
 }
@@ -740,11 +714,11 @@ const MIRROR_CSS = `/*css*/
 
 class Settings {
   static get(key, fallback = DEFAULT_SETTINGS[key]) {
-    return this.normalize(key, Data.load(Plugin.KEY, key) ?? fallback);
+    return this.normalize(key, Data.load(key) ?? fallback);
   }
 
   static set(key, value) {
-    Data.save(Plugin.KEY, key, this.serialize(this.normalize(key, value)));
+    Data.save(key, this.serialize(this.normalize(key, value)));
   }
 
   static normalize(key, value) {
@@ -780,6 +754,9 @@ class Settings {
       case SETTINGS_KEYS.MAX_RECENTS:
         return Number.parseInt(value) || DEFAULT_MAX_RECENTS;
 
+      case SETTINGS_KEYS.CURRENT_VERSION:
+        return typeof value === "string" ? value : null;
+
       case SETTINGS_KEYS.RECENTS:
         return Array.isArray(value) ? value : [];
 
@@ -814,15 +791,14 @@ class LatexProcessor {
   static generateApiRequest(latex, dpi, color) {
     if (!latex.trim()) return "";
 
-    const activeColor = Color.from(color, DEFAULT_LATEX_SETTINGS.color);
-    const { r, g, b } = activeColor.json;
+    const { r, g, b } = color;
     const payload = LATEX_PAYLOAD_FORMAT(dpi, r, g, b, latex);
     return `${API.URL}png.latex?${encodeURIComponent(payload)}`;
   }
 
   static saveRecent(state) {
     const { latex, dpi } = state;
-    const recents = Settings.get(SETTINGS_KEYS.RECENTS) ?? [];
+    const recents = Settings.get(SETTINGS_KEYS.RECENTS);
     const recent = {
       latex: latex.trim(),
       dpi,
@@ -842,69 +818,55 @@ class LatexProcessor {
 
   static copyToClipboard(state) {
     const { latex, color, dpi } = state;
-    if (!latex?.trim()) return;
     LatexProcessor.saveRecent(state);
 
     const fetched = this.generateApiRequest(latex, dpi, color);
 
-    try {
-      let img = new Image();
-      img.crossOrigin = "Anonymous";
+    let img = new Image();
+    img.crossOrigin = "Anonymous";
 
-      const cleanup = () => {
-        img = null;
-      };
+    const cleanup = () => {
+      img = null;
+    };
 
-      img.onload = async () => {
-        try {
-          const canvas = document.createElement("canvas");
-          canvas.width = img.width;
-          canvas.height = img.height;
-          const ctx = canvas.getContext("2d");
-          if (!ctx) throw new Error(ERROR_MESSAGES.CANVAS_CONTEXT_FAILED);
+    img.onload = async () => {
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext("2d");
 
-          ctx.drawImage(img, 0, 0);
+        ctx.drawImage(img, 0, 0);
 
-          const blob = await new Promise((resolve, reject) => {
-            canvas.toBlob((value) => {
-              if (value) {
-                resolve(value);
-                return;
-              }
+        const blob = await new Promise((resolve, reject) => {
+          canvas.toBlob((value) => {
+            if (value) {
+              resolve(value);
+              return;
+            }
 
-              reject(new Error(ERROR_MESSAGES.BLOB_CREATION_FAILED));
-            }, IMAGE_MIME_TYPE);
-          });
+            reject(new Error(ERROR_MESSAGES.BLOB_CREATION_FAILED));
+          }, IMAGE_MIME_TYPE);
+        });
 
-          if (
-            !navigator.clipboard?.write ||
-            typeof ClipboardItem === "undefined"
-          ) {
-            throw new Error(ERROR_MESSAGES.CLIPBOARD_NOT_SUPPORTED);
-          }
-
-          await navigator.clipboard.write([
-            new ClipboardItem({ [IMAGE_MIME_TYPE]: blob }),
-          ]);
-          UI.toast("Image copied!", TOAST_TYPES.SUCCESS);
-        } catch (err) {
-          Logger.error(Plugin.NAME, err);
-          UI.toast(ERROR_MESSAGES.IMAGE_PROCESS_FAILED, TOAST_TYPES.ERROR);
-        } finally {
-          cleanup();
-        }
-      };
-
-      img.onerror = () => {
-        UI.toast(ERROR_MESSAGES.IMAGE_LOAD_FAILED, TOAST_TYPES.ERROR);
+        await navigator.clipboard.write([
+          new ClipboardItem({ [IMAGE_MIME_TYPE]: blob }),
+        ]);
+        UI.toast("Image copied!", TOAST_TYPES.SUCCESS);
+      } catch (err) {
+        Logger.error(err);
+        UI.toast(ERROR_MESSAGES.IMAGE_PROCESS_FAILED, TOAST_TYPES.ERROR);
+      } finally {
         cleanup();
-      };
+      }
+    };
 
-      img.src = fetched;
-    } catch (err) {
-      Logger.error(Plugin.NAME, err);
-      UI.toast(ERROR_MESSAGES.IMAGE_PROCESS_FAILED, TOAST_TYPES.ERROR);
-    }
+    img.onerror = () => {
+      UI.toast(ERROR_MESSAGES.IMAGE_LOAD_FAILED, TOAST_TYPES.ERROR);
+      cleanup();
+    };
+
+    img.src = fetched;
   }
 }
 
@@ -920,7 +882,7 @@ class UI {
 
   static focusGeneratorTextarea({
     preferStoredCursor = true,
-    delay = 100,
+    delay = FOCUS_DELAY,
   } = {}) {
     UI.clearPendingTimeouts();
     UI.focusTimer = setTimeout(() => {
@@ -930,7 +892,7 @@ class UI {
         return;
       }
 
-      const lastCharIndex = textarea.value?.length ?? 0;
+      const lastCharIndex = textarea.value.length;
       const cursorPosition =
         preferStoredCursor && Number.isFinite(UI.lastCursorIndex)
           ? clamp(0, UI.lastCursorIndex, lastCharIndex)
@@ -1002,8 +964,6 @@ class UI {
   }
 
   static findMatchingBracket(source, cursor) {
-    if (!source || !source.length) return null;
-
     let bracketIndex = -1;
     if (
       cursor > 0 &&
@@ -1050,9 +1010,7 @@ class UI {
     const pushToken = (type, value) => {
       const escaped = this.escapeHtml(value);
       spans.push(
-        type
-          ? `<span class="latex-generator-token latex-generator-token--${type}">${escaped}</span>`
-          : escaped,
+        `<span class="latex-generator-token latex-generator-token--${type}">${escaped}</span>`,
       );
     };
 
@@ -1168,7 +1126,7 @@ class UI {
     return Object.fromEntries(
       Object.entries(syntaxColors).map(([key, value]) => [
         `--latex-token-${key === SETTINGS_KEYS.MATCHED_BRACE_COLOR ? "matched-brace" : key}`,
-        value?.hex ?? value,
+        value.hex,
       ]),
     );
   }
@@ -1217,7 +1175,7 @@ class UI {
             name: "Default Color",
             note: "Default equation color.",
             value: defaultColor.hex,
-            defaultValue: DEFAULT_LATEX_SETTINGS.color.hex,
+            defaultColor: DEFAULT_LATEX_SETTINGS.color.hex,
             colors: [],
           },
           {
@@ -1248,26 +1206,22 @@ class UI {
         name: "Syntax Highlighting",
         shown: true,
         collapsible: true,
-        settings: SYNTAX_COLOR_SETTINGS.map((entry) => {
-          const value =
-            syntaxColors[entry.key] ?? DEFAULT_SYNTAX_COLORS[entry.key];
-          const defaultColor = DEFAULT_SYNTAX_COLORS[entry.key];
-
-          return {
-            type: "color",
-            id: entry.id,
-            name: entry.name,
-            note: entry.note,
-            value: value.hex,
-            defaultValue: defaultColor.hex,
-            colors: [],
-          };
-        }),
+        settings: SYNTAX_COLOR_SETTINGS.map((entry) => ({
+          type: "color",
+          id: entry.id,
+          name: entry.name,
+          note: entry.note,
+          value: syntaxColors[entry.key].hex,
+          defaultColor: DEFAULT_SYNTAX_COLORS[entry.key].hex,
+          colors: [],
+        })),
       },
     ];
   }
 
   static LatexModalContent({ stateRef }) {
+    const [, setSettingsRevision] = useState(0);
+
     const savedData = Settings.get(SETTINGS_KEYS.LATEX_SETTINGS);
 
     const baseColor = Settings.get(SETTINGS_KEYS.DEFAULT_COLOR);
@@ -1289,6 +1243,8 @@ class UI {
       autoPreview ? defaultDpi : dpi,
     );
 
+    const [previewColor, setPreviewColor] = useState(baseColor.hex);
+
     const [fetched, setFetched] = useState(
       autoPreview && savedData.latex.trim()
         ? LatexProcessor.generateApiRequest(
@@ -1304,11 +1260,18 @@ class UI {
 
     const getCurrentCursorIndex = () => {
       const textarea = textareaRef.current;
-      if (textarea) return textarea.selectionStart ?? cursorIndex;
+      if (textarea) return textarea.selectionStart;
       return cursorIndex;
     };
 
-    const canPreview = previewLatex !== latex || previewDpi !== dpi;
+    const canPreview =
+      previewLatex !== latex ||
+      previewDpi !== dpi ||
+      previewColor !== baseColor.hex;
+
+    useEffect(() => {
+      setInsertColor(baseColor);
+    }, [baseColor.hex]);
 
     useEffect(() => {
       const timer = setTimeout(() => {
@@ -1316,7 +1279,7 @@ class UI {
         if (!activeTextarea) return;
 
         activeTextarea.focus({ preventScroll: true });
-        const cursorPosition = activeTextarea.value?.length ?? 0;
+        const cursorPosition = activeTextarea.value.length;
         activeTextarea.setSelectionRange(cursorPosition, cursorPosition);
         setCursorIndex(cursorPosition);
       }, FOCUS_DELAY);
@@ -1329,7 +1292,6 @@ class UI {
         latex,
         dpi,
         color: baseColor,
-        fetched,
       };
 
       const timer = setTimeout(() => {
@@ -1340,7 +1302,7 @@ class UI {
         });
       }, SETTINGS_SAVE_DELAY);
       return () => clearTimeout(timer);
-    }, [latex, dpi, baseColor, fetched, stateRef]);
+    }, [latex, dpi, baseColor, stateRef]);
 
     const updateFetchedPreview = () => {
       if (latex.trim() === "") {
@@ -1354,12 +1316,13 @@ class UI {
       if (!autoPreview) return;
       const timer = setTimeout(updateFetchedPreview, PREVIEW_UPDATE_DELAY);
       return () => clearTimeout(timer);
-    }, [latex, dpi, autoPreview]);
+    }, [latex, dpi, baseColor.hex, autoPreview]);
 
     const handlePreview = () => {
       if (!canPreview || autoPreview) return;
       setPreviewLatex(latex);
       setPreviewDpi(dpi);
+      setPreviewColor(baseColor.hex);
       updateFetchedPreview();
     };
 
@@ -1375,8 +1338,8 @@ class UI {
       }
 
       const textarea = event.target;
-      const start = textarea.selectionStart ?? 0;
-      const end = textarea.selectionEnd ?? start;
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
       const key = event.key;
       const closing = BRACKET_PAIRS[key];
 
@@ -1532,10 +1495,10 @@ class UI {
       const textarea = textareaRef.current;
       if (!textarea) return;
 
-      const start = textarea.selectionStart ?? 0;
-      const end = textarea.selectionEnd ?? start;
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
       const selectedText = latex.slice(start, end);
-      const { r, g, b } = insertColor.json;
+      const { r, g, b } = insertColor;
 
       const prefix = `{\\color[RGB]{${r},${g},${b}} `;
       const suffix = "}";
@@ -1693,7 +1656,9 @@ class UI {
                       onMouseLeave,
                       onClick: () => {
                         UI.rememberCursor(getCurrentCursorIndex());
-                        UI.openSettingsFromModal();
+                        UI.openSettingsFromModal(() =>
+                          setSettingsRevision((rev) => rev + 1),
+                        );
                       },
                     },
                     createElement(
@@ -1728,9 +1693,9 @@ class UI {
               spellCheck: false,
               onChange: (e) => {
                 setLatex(e.target.value);
-                setCursorIndex(e.target.selectionStart ?? 0);
+                setCursorIndex(e.target.selectionStart);
               },
-              onSelect: (e) => setCursorIndex(e.target.selectionStart ?? 0),
+              onSelect: (e) => setCursorIndex(e.target.selectionStart),
               onKeyDown: handleEditorKeyDown,
               onScroll: handleEditorScroll,
             }),
@@ -1749,7 +1714,7 @@ class UI {
             max: 1200,
             value: dpi,
             onChange: (val) => setDpi(val),
-            markers: [50, 100, 250, 500, 800, 1200],
+            markers: [100, 250, 500, 800, 1200],
           }),
         ),
 
@@ -1775,7 +1740,7 @@ class UI {
             { className: "latex-generator-inline-color-controls" },
             createElement(ColorInput, {
               value: insertColor.hex,
-              defaultValue: baseColor.hex,
+              defaultColor: baseColor.hex,
               colors: DEFAULT_COLORS.map((swatch) => swatch.hex),
               onChange: (val) => setInsertColor(Color.from(val, baseColor)),
             }),
@@ -1873,7 +1838,7 @@ class UI {
     const defaultDpi = Settings.get(SETTINGS_KEYS.DEFAULT_DPI);
 
     const stateRef = {
-      current: { latex: "", dpi: defaultDpi, color: defaultColor, fetched: "" },
+      current: { latex: "", dpi: defaultDpi, color: defaultColor },
     };
 
     BdUI.showConfirmationModal(
@@ -1896,7 +1861,28 @@ class UI {
     UI.focusGeneratorTextarea({ preferStoredCursor: false });
   }
 
-  static openSettingsFromModal() {
+  static showChangelog(version) {
+    BdUI.showChangelogModal({
+      title: Plugin.NAME,
+      subtitle: `Version ${version}`,
+      blurb: CHANGELOG.blurb,
+      changes: CHANGELOG.changes,
+    });
+  }
+
+  static showChangelogIfUpdated(version) {
+    if (Settings.get(SETTINGS_KEYS.CURRENT_VERSION) === version) return;
+
+    UI.showChangelog(version);
+    Settings.set(SETTINGS_KEYS.CURRENT_VERSION, version);
+  }
+
+  static openSettingsFromModal(onClose) {
+    const handleClose = () => {
+      if (onClose) onClose();
+      UI.focusGeneratorTextarea();
+    };
+
     BdUI.showConfirmationModal(
       `${Plugin.NAME} Settings`,
       createElement(UI.SettingsModal),
@@ -1904,8 +1890,8 @@ class UI {
         confirmText: "Done",
         cancelText: null,
         size: "bd-modal-large",
-        onConfirm: () => UI.focusGeneratorTextarea(),
-        onClose: () => UI.focusGeneratorTextarea(),
+        onConfirm: handleClose,
+        onClose: handleClose,
       },
     );
   }
@@ -1949,6 +1935,15 @@ class UI {
             return;
           }
 
+          const syntaxColorSetting = UI.getSyntaxColorSettingById(id);
+          if (syntaxColorSetting) {
+            Settings.set(SETTINGS_KEYS.SYNTAX_COLORS, {
+              ...Settings.get(SETTINGS_KEYS.SYNTAX_COLORS),
+              [syntaxColorSetting.key]: value,
+            });
+            return;
+          }
+
           Settings.set(id, value);
         },
       }),
@@ -1956,9 +1951,7 @@ class UI {
   }
 
   static RecentsModal({ onOpen }) {
-    const [recents, setRecents] = useState(
-      Settings.get(SETTINGS_KEYS.RECENTS) ?? [],
-    );
+    const [recents, setRecents] = useState(Settings.get(SETTINGS_KEYS.RECENTS));
 
     const deleteRecent = (index) => {
       const updated = recents.filter((_, i) => i !== index);
@@ -1992,7 +1985,12 @@ class UI {
 
     return createElement(
       "div",
-      { className: "latex-generator-recents-list" },
+      {
+        className: "latex-generator-recents-list",
+        style: UI.createSyntaxHighlightStyle(
+          Settings.get(SETTINGS_KEYS.SYNTAX_COLORS),
+        ),
+      },
       recents.map((recent, index) =>
         createElement(
           "div",
@@ -2040,20 +2038,19 @@ class UI {
           ),
         ),
       ),
-      recents.length > 0 &&
+      createElement(
+        "div",
+        { className: "latex-generator-recents-footer" },
         createElement(
-          "div",
-          { className: "latex-generator-recents-footer" },
-          createElement(
-            "button",
-            {
-              type: "button",
-              className: "latex-generator-recents-delete-btn bd-button",
-              onClick: clearRecents,
-            },
-            "Clear All",
-          ),
+          "button",
+          {
+            type: "button",
+            className: "latex-generator-recents-delete-btn bd-button",
+            onClick: clearRecents,
+          },
+          "Clear All",
         ),
+      ),
     );
   }
 }
@@ -2075,36 +2072,29 @@ class ChatBar {
 
     ChatBar.patchedButtons = ChatBarButtons;
 
-    Patcher.after(
-      Plugin.PATCH_ID,
-      ChatBarButtons,
-      "type",
-      (_, [args], res) => {
-        if (
-          args?.disabled ||
-          !Object.values(CHAT_BAR_TYPES).includes(
-            args?.type?.analyticsName,
-          ) ||
-          !Array.isArray(res?.props?.children)
-        ) {
-          return;
-        }
+    Patcher.after(ChatBarButtons, "type", (_, [args], res) => {
+      if (
+        args?.disabled ||
+        !Object.values(CHAT_BAR_TYPES).includes(args?.type?.analyticsName) ||
+        !Array.isArray(res?.props?.children)
+      ) {
+        return;
+      }
 
-        res.props.children.unshift(
-          createElement(UI.ChatBarButton, {
-            key: "latex-generator-button",
-          }),
-        );
-      },
-    );
+      res.props.children.unshift(
+        createElement(UI.ChatBarButton, {
+          key: "latex-generator-button",
+        }),
+      );
+    });
 
-    ReactUtils?.rerenderComponent?.([ChatBarButtons, "type"]);
+    ReactUtils.rerenderComponent([ChatBarButtons, "type"]);
   }
 
   static unpatch() {
-    Patcher.unpatchAll(Plugin.PATCH_ID);
+    Patcher.unpatchAll();
     if (ChatBar.patchedButtons) {
-      ReactUtils?.rerenderComponent?.([ChatBar.patchedButtons, "type"]);
+      ReactUtils.rerenderComponent([ChatBar.patchedButtons, "type"]);
       ChatBar.patchedButtons = null;
     }
   }
@@ -2117,20 +2107,23 @@ UI.bracketMatching = null;
 
 class Style {
   static inject() {
-    DOM.addStyle(Plugin.PATCH_ID, CSS);
-    DOM.addStyle(`${Plugin.PATCH_ID}-mirror`, MIRROR_CSS);
+    DOM.addStyle(CSS);
   }
 
   static remove() {
-    DOM.removeStyle(Plugin.PATCH_ID);
-    DOM.removeStyle(`${Plugin.PATCH_ID}-mirror`);
+    DOM.removeStyle();
   }
 }
 
 module.exports = class LaTeXGeneratorPlugin {
+  constructor(meta) {
+    this.meta = meta;
+  }
+
   start() {
     Style.inject();
     ChatBar.patch();
+    UI.showChangelogIfUpdated(this.meta.version);
   }
 
   stop() {
