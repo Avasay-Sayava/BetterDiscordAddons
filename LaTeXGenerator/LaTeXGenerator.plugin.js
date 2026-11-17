@@ -7,6 +7,11 @@
  * @source https://github.com/Avasay-Sayava/BetterDiscordPlugins/blob/main/LaTeXGenerator/LaTeXGenerator.plugin.js
  */
 
+const Plugin = {
+  NAME: "LaTeX Generator",
+  KEY: "LaTeXGenerator",
+};
+
 const {
   React,
   ReactUtils,
@@ -17,7 +22,7 @@ const {
   DOM,
   Patcher,
   Logger,
-} = BdApi;
+} = new BdApi(Plugin.KEY);
 
 const { useState, useEffect, useRef, createElement } = React;
 const { Tooltip, ColorInput, SliderInput } = Components;
@@ -34,12 +39,6 @@ const ModalActions = Webpack.getByKeys(
   "closeModal",
   "closeAllModals",
 );
-
-const Plugin = {
-  NAME: "LaTeX Generator",
-  KEY: "LaTeXGenerator",
-  PATCH_ID: "latex-generator",
-};
 
 const API = {
   NAME: "CodeCogs LaTeX API",
@@ -689,11 +688,11 @@ const MIRROR_CSS = `/*css*/
 
 class Settings {
   static get(key, fallback = DEFAULT_SETTINGS[key]) {
-    return this.normalize(key, Data.load(Plugin.KEY, key) ?? fallback);
+    return this.normalize(key, Data.load(key) ?? fallback);
   }
 
   static set(key, value) {
-    Data.save(Plugin.KEY, key, this.serialize(this.normalize(key, value)));
+    Data.save(key, this.serialize(this.normalize(key, value)));
   }
 
   static normalize(key, value) {
@@ -826,7 +825,7 @@ class LatexProcessor {
         ]);
         UI.toast("Image copied!", TOAST_TYPES.SUCCESS);
       } catch (err) {
-        Logger.error(Plugin.NAME, err);
+        Logger.error(err);
         UI.toast(ERROR_MESSAGES.IMAGE_PROCESS_FAILED, TOAST_TYPES.ERROR);
       } finally {
         cleanup();
@@ -2006,34 +2005,27 @@ class ChatBar {
 
     ChatBar.patchedButtons = ChatBarButtons;
 
-    Patcher.after(
-      Plugin.PATCH_ID,
-      ChatBarButtons,
-      "type",
-      (_, [args], res) => {
-        if (
-          args?.disabled ||
-          !Object.values(CHAT_BAR_TYPES).includes(
-            args?.type?.analyticsName,
-          ) ||
-          !Array.isArray(res?.props?.children)
-        ) {
-          return;
-        }
+    Patcher.after(ChatBarButtons, "type", (_, [args], res) => {
+      if (
+        args?.disabled ||
+        !Object.values(CHAT_BAR_TYPES).includes(args?.type?.analyticsName) ||
+        !Array.isArray(res?.props?.children)
+      ) {
+        return;
+      }
 
-        res.props.children.unshift(
-          createElement(UI.ChatBarButton, {
-            key: "latex-generator-button",
-          }),
-        );
-      },
-    );
+      res.props.children.unshift(
+        createElement(UI.ChatBarButton, {
+          key: "latex-generator-button",
+        }),
+      );
+    });
 
     ReactUtils.rerenderComponent([ChatBarButtons, "type"]);
   }
 
   static unpatch() {
-    Patcher.unpatchAll(Plugin.PATCH_ID);
+    Patcher.unpatchAll();
     if (ChatBar.patchedButtons) {
       ReactUtils.rerenderComponent([ChatBar.patchedButtons, "type"]);
       ChatBar.patchedButtons = null;
@@ -2048,13 +2040,13 @@ UI.bracketMatching = null;
 
 class Style {
   static inject() {
-    DOM.addStyle(Plugin.PATCH_ID, CSS);
-    DOM.addStyle(`${Plugin.PATCH_ID}-mirror`, MIRROR_CSS);
+    DOM.addStyle(CSS);
+    DOM.addStyle(`${Plugin.KEY}-mirror`, MIRROR_CSS);
   }
 
   static remove() {
-    DOM.removeStyle(Plugin.PATCH_ID);
-    DOM.removeStyle(`${Plugin.PATCH_ID}-mirror`);
+    DOM.removeStyle();
+    DOM.removeStyle(`${Plugin.KEY}-mirror`);
   }
 }
 
