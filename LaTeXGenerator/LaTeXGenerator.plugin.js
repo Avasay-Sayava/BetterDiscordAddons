@@ -58,7 +58,7 @@ const CHANGELOG = {
         "Restored the Default reset button on all color pickers.",
         "Synced the modal color picker and preview state immediately when closing Settings.",
         "Applied custom syntax highlighting colors inside the Recents modal.",
-        "Removed the redundant 50 marker from the modal DPI slider to match Settings.",
+        "Removed the 50 marker from the modal DPI slider to match Settings.",
       ],
     },
     {
