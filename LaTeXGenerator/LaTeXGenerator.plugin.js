@@ -1189,6 +1189,8 @@ class UI {
   }
 
   static LatexModalContent({ stateRef }) {
+    const [, setSettingsRevision] = useState(0);
+
     const savedData = Settings.get(SETTINGS_KEYS.LATEX_SETTINGS);
 
     const baseColor = Settings.get(SETTINGS_KEYS.DEFAULT_COLOR);
@@ -1210,6 +1212,8 @@ class UI {
       autoPreview ? defaultDpi : dpi,
     );
 
+    const [previewColor, setPreviewColor] = useState(baseColor.hex);
+
     const [fetched, setFetched] = useState(
       autoPreview && savedData.latex.trim()
         ? LatexProcessor.generateApiRequest(
@@ -1229,7 +1233,14 @@ class UI {
       return cursorIndex;
     };
 
-    const canPreview = previewLatex !== latex || previewDpi !== dpi;
+    const canPreview =
+      previewLatex !== latex ||
+      previewDpi !== dpi ||
+      previewColor !== baseColor.hex;
+
+    useEffect(() => {
+      setInsertColor(baseColor);
+    }, [baseColor.hex]);
 
     useEffect(() => {
       const timer = setTimeout(() => {
@@ -1274,12 +1285,13 @@ class UI {
       if (!autoPreview) return;
       const timer = setTimeout(updateFetchedPreview, PREVIEW_UPDATE_DELAY);
       return () => clearTimeout(timer);
-    }, [latex, dpi, autoPreview]);
+    }, [latex, dpi, baseColor.hex, autoPreview]);
 
     const handlePreview = () => {
       if (!canPreview || autoPreview) return;
       setPreviewLatex(latex);
       setPreviewDpi(dpi);
+      setPreviewColor(baseColor.hex);
       updateFetchedPreview();
     };
 
@@ -1613,7 +1625,9 @@ class UI {
                       onMouseLeave,
                       onClick: () => {
                         UI.rememberCursor(getCurrentCursorIndex());
-                        UI.openSettingsFromModal();
+                        UI.openSettingsFromModal(() =>
+                          setSettingsRevision((rev) => rev + 1),
+                        );
                       },
                     },
                     createElement(
@@ -1816,7 +1830,12 @@ class UI {
     UI.focusGeneratorTextarea({ preferStoredCursor: false });
   }
 
-  static openSettingsFromModal() {
+  static openSettingsFromModal(onClose) {
+    const handleClose = () => {
+      if (onClose) onClose();
+      UI.focusGeneratorTextarea();
+    };
+
     BdUI.showConfirmationModal(
       `${Plugin.NAME} Settings`,
       createElement(UI.SettingsModal),
@@ -1824,8 +1843,8 @@ class UI {
         confirmText: "Done",
         cancelText: null,
         size: "bd-modal-large",
-        onConfirm: () => UI.focusGeneratorTextarea(),
-        onClose: () => UI.focusGeneratorTextarea(),
+        onConfirm: handleClose,
+        onClose: handleClose,
       },
     );
   }
