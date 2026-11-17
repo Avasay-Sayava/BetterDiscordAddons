@@ -61,8 +61,6 @@ const TOAST_TYPES = {
   SUCCESS: "success",
   ERROR: "error",
   INFO: "info",
-  WARNING: "warning",
-  DEFAULT: "default",
 };
 
 class Color {
@@ -76,18 +74,12 @@ class Color {
   static from(value, fallback = new Color(255, 255, 255, 1)) {
     if (value instanceof Color) return value.clone();
 
-    if (Array.isArray(value)) {
-      return new Color(value[0], value[1], value[2], value[3] ?? 1);
-    }
-
     if (typeof value === "number") {
       return new Color((value >> 16) & 255, (value >> 8) & 255, value & 255, 1);
     }
 
     if (typeof value === "string") {
-      const normalized = value.trim();
-
-      let match = /^#([A-Fa-f0-9]{6})$/.exec(normalized);
+      const match = /^#([A-Fa-f0-9]{6})$/.exec(value.trim());
       if (match) {
         const integer = Number.parseInt(match[1], 16);
         return new Color(
@@ -97,40 +89,9 @@ class Color {
           1,
         );
       }
-
-      match = /^#([A-Fa-f0-9]{8})$/.exec(normalized);
-      if (match) {
-        const integer = Number.parseInt(match[1], 16);
-        return new Color(
-          (integer >> 24) & 255,
-          (integer >> 16) & 255,
-          (integer >> 8) & 255,
-          ((integer & 255) / 255).toFixed(3),
-        );
-      }
-
-      match =
-        /^rgba?\(\s*([0-9]{1,3})\s*,\s*([0-9]{1,3})\s*,\s*([0-9]{1,3})(?:\s*,\s*([0-9]*\.?[0-9]+)\s*)?\)$/.exec(
-          normalized,
-        );
-      if (match) {
-        return new Color(match[1], match[2], match[3], match[4] ?? 1);
-      }
     }
 
     if (value && typeof value === "object") {
-      if (typeof value.hex === "string") {
-        return Color.from(value.hex, fallback);
-      }
-
-      if (value.rgb && typeof value.rgb === "object") {
-        return Color.from(value.rgb, fallback);
-      }
-
-      if (value.color && typeof value.color === "string") {
-        return Color.from(value.color, fallback);
-      }
-
       return new Color(value.r, value.g, value.b, value.a);
     }
 
@@ -145,10 +106,6 @@ class Color {
     return `#${this.r.toString(16).padStart(2, "0")}${this.g
       .toString(16)
       .padStart(2, "0")}${this.b.toString(16).padStart(2, "0")}`.toUpperCase();
-  }
-
-  get rgba() {
-    return `rgba(${this.r}, ${this.g}, ${this.b}, ${this.a})`;
   }
 
   get json() {
