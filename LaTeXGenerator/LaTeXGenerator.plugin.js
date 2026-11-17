@@ -3,12 +3,13 @@
  * @author Avasay-Sayava
  * @authorId 812235988659077120
  * @description Adds a button to the chat bar to generate and copy LaTeX equations as images.
- * @version 2.3.1
+ * @version 2.3.3
  * @source https://github.com/Avasay-Sayava/BetterDiscordPlugins/blob/main/LaTeXGenerator/LaTeXGenerator.plugin.js
  */
 
 const {
   React,
+  ReactUtils,
   Components,
   Webpack,
   Data,
@@ -17,9 +18,9 @@ const {
   Patcher,
   Logger,
 } = BdApi;
+
 const { useState, useEffect, useRef, createElement } = React;
 const { Tooltip, ColorInput, SliderInput } = Components;
-
 const { min, max } = Math;
 
 const DiscordClasses = {
@@ -654,12 +655,8 @@ const CSS = `/*css*/
   border: 1px solid var(--input-border-default);
 }
 
-.latex-generator-box:hover {
-  border-color: var(--input-border-default-hover);
-}
-
 .latex-generator-box:focus-within {
-  border-color: var(--input-border-active);
+  border-color: var(--text-link);
 }
 
 .latex-generator-editor-shell {
@@ -1671,10 +1668,10 @@ class UI {
                     createElement(
                       "div",
                       {
-                        className: `${DiscordClasses.Button.button} ${DiscordClasses.ButtonWrapper.button}`,
+                        className: `${DiscordClasses.Button?.button ?? ""} ${DiscordClasses.ButtonWrapper?.button ?? ""}`,
                       },
                       createElement("div", {
-                        className: DiscordClasses.Icon.iconContainer,
+                        className: DiscordClasses.Icon?.iconContainer ?? "",
                         dangerouslySetInnerHTML: {
                           __html: RECENTS_ICON,
                         },
@@ -1702,10 +1699,10 @@ class UI {
                     createElement(
                       "div",
                       {
-                        className: `${DiscordClasses.Button.button} ${DiscordClasses.ButtonWrapper.button}`,
+                        className: `${DiscordClasses.Button?.button ?? ""} ${DiscordClasses.ButtonWrapper?.button ?? ""}`,
                       },
                       createElement("div", {
-                        className: DiscordClasses.Icon.iconContainer,
+                        className: DiscordClasses.Icon?.iconContainer ?? "",
                         dangerouslySetInnerHTML: {
                           __html: SETTINGS_ICON,
                         },
@@ -1804,10 +1801,10 @@ class UI {
           createElement(
             "div",
             {
-              className: `${DiscordClasses.Button.button} ${DiscordClasses.ButtonWrapper.button}`,
+              className: `${DiscordClasses.Button?.button ?? ""} ${DiscordClasses.ButtonWrapper?.button ?? ""}`,
             },
             createElement("div", {
-              className: DiscordClasses.Icon.iconContainer,
+              className: DiscordClasses.Icon?.iconContainer ?? "",
               dangerouslySetInnerHTML: { __html: LATEX_ICON },
             }),
           ),
@@ -2062,68 +2059,13 @@ class UI {
 }
 
 class ChatBar {
-  static resolveButtons(module) {
-    if (!module) return null;
-
-    if (typeof module?.type === "function") return module;
-    if (typeof module?.A?.type === "function") return module.A;
-    if (typeof module?.default?.type === "function") return module.default;
-    if (typeof module?.default?.A?.type === "function") return module.default.A;
-
-    return null;
-  }
-
   static patch() {
-    const applyPatch = (Buttons) => {
-      if (!Buttons || typeof Buttons.type !== "function") {
-        UI.toast(
-          "Failed to find chat bar to inject the button",
-          TOAST_TYPES.ERROR,
-        );
-        return;
-      }
+    const ChatBarButtons = Webpack.getBySource(
+      "isSubmitButtonEnabled",
+      "getActiveOption",
+    )?.A;
 
-      Patcher.after(Plugin.PATCH_ID, Buttons, "type", (_, args, res) => {
-        if (
-          args.length !== 2 ||
-          args[0]?.disabled ||
-          !Object.values(CHAT_BAR_TYPES).includes(
-            args[0]?.type?.analyticsName,
-          ) ||
-          !Array.isArray(res?.props?.children)
-        ) {
-          return;
-        }
-
-        const exists = res.props.children.some(
-          (child) => child?.key === "latex-generator-button",
-        );
-        if (exists) return;
-
-        res.props.children.unshift(
-          createElement(UI.ChatBarButton, {
-            key: "latex-generator-button",
-          }),
-        );
-      });
-    };
-
-    const sourceMatch = Webpack.getBySource(
-      "type",
-      "showAllButtons",
-      "promotionsByType",
-    );
-
-    const fromSource = ChatBar.resolveButtons(sourceMatch);
-    if (fromSource) {
-      applyPatch(fromSource);
-      return;
-    }
-
-    if (
-      typeof Webpack.waitForModule !== "function" ||
-      !Webpack.Filters?.bySource
-    ) {
+    if (!ChatBarButtons) {
       UI.toast(
         "Failed to find chat bar to inject the button",
         TOAST_TYPES.ERROR,
@@ -2131,34 +2073,44 @@ class ChatBar {
       return;
     }
 
-    ChatBar.unpatchController?.abort();
-    const controller = new AbortController();
-    ChatBar.unpatchController = controller;
+    ChatBar.patchedButtons = ChatBarButtons;
 
-    Webpack.waitForModule(
-      Webpack.Filters.bySource("showAllButtons", "promotionsByType"),
-      {
-        defaultExport: false,
-        searchExports: true,
-        signal: controller.signal,
+    Patcher.after(
+      Plugin.PATCH_ID,
+      ChatBarButtons,
+      "type",
+      (_, [args], res) => {
+        if (
+          args?.disabled ||
+          !Object.values(CHAT_BAR_TYPES).includes(
+            args?.type?.analyticsName,
+          ) ||
+          !Array.isArray(res?.props?.children)
+        ) {
+          return;
+        }
+
+        res.props.children.unshift(
+          createElement(UI.ChatBarButton, {
+            key: "latex-generator-button",
+          }),
+        );
       },
-    )
-      .then((module) => {
-        if (controller.signal.aborted) return;
-        const resolved = ChatBar.resolveButtons(module);
-        applyPatch(resolved);
-      })
-      .catch(() => {});
+    );
+
+    ReactUtils?.rerenderComponent?.([ChatBarButtons, "type"]);
   }
 
   static unpatch() {
-    ChatBar.unpatchController?.abort();
-    ChatBar.unpatchController = null;
     Patcher.unpatchAll(Plugin.PATCH_ID);
+    if (ChatBar.patchedButtons) {
+      ReactUtils?.rerenderComponent?.([ChatBar.patchedButtons, "type"]);
+      ChatBar.patchedButtons = null;
+    }
   }
 }
 
-ChatBar.unpatchController = null;
+ChatBar.patchedButtons = null;
 UI.focusTimer = null;
 UI.lastCursorIndex = null;
 UI.bracketMatching = null;
