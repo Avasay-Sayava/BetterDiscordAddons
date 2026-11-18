@@ -3,7 +3,7 @@
  * @author Avasay-Sayava
  * @authorId 812235988659077120
  * @description Adds a button to the chat bar to generate and copy LaTeX equations as images.
- * @version 2.3.5
+ * @version 2.3.6
  * @source https://github.com/Avasay-Sayava/BetterDiscordPlugins/blob/main/LaTeXGenerator/LaTeXGenerator.plugin.js
  */
 
@@ -45,27 +45,13 @@ const API = {
 };
 
 const CHANGELOG = {
-  blurb:
-    "Discord compatibility fixes, settings & preview sync.",
+  blurb: "Hotfix for BetterDiscord compatibility.",
   changes: [
     {
       title: "Bug Fixes",
       type: "fixed",
       items: [
-        "Fixed the chat bar button not showing.",
-        "Fixed syntax highlighting colors not saving from Settings.",
-        "Restored the Default reset button on all color pickers.",
-        "Synced the modal color picker and preview state immediately when closing Settings.",
-        "Applied custom syntax highlighting colors inside the Recents modal.",
-      ],
-    },
-    {
-      title: "Improvements",
-      type: "improved",
-      items: [
-        "Removed the 50 marker from the modal DPI slider to match Settings.",
-        "Cleaned up plugin lifecycle and merged style injection using BetterDiscord's scoped BdApi.",
-        "Removed dead code and redundant checks across color parsing, clipboard handling, and chat bar patching.",
+        "Fixed a startup crash on BetterDiscord versions without ReactUtils.rerenderComponent.",
       ],
     },
   ],
