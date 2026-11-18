@@ -14,7 +14,6 @@ const Plugin = {
 
 const {
   React,
-  ReactUtils,
   Components,
   Webpack,
   Data,
@@ -2070,8 +2069,6 @@ class ChatBar {
       return;
     }
 
-    ChatBar.patchedButtons = ChatBarButtons;
-
     Patcher.after(ChatBarButtons, "type", (_, [args], res) => {
       if (
         args?.disabled ||
@@ -2087,20 +2084,13 @@ class ChatBar {
         }),
       );
     });
-
-    ReactUtils.rerenderComponent([ChatBarButtons, "type"]);
   }
 
   static unpatch() {
     Patcher.unpatchAll();
-    if (ChatBar.patchedButtons) {
-      ReactUtils.rerenderComponent([ChatBar.patchedButtons, "type"]);
-      ChatBar.patchedButtons = null;
-    }
   }
 }
 
-ChatBar.patchedButtons = null;
 UI.focusTimer = null;
 UI.lastCursorIndex = null;
 UI.bracketMatching = null;
